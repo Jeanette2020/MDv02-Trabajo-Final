@@ -1,0 +1,115 @@
+---
+title: "Locales que brindan servicio educativo superior de pregrado"
+author: "Jeanette"
+date: "25/10/2020"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+
+```
+
+```{r configuracion_inicial,echo=FALSE,comment=F,warning=FALSE,message=FALSE,include=FALSE}
+
+library(ggplot2)
+library(plotly)
+library(sp)
+library(rgdal)
+library(gpclib)
+library(maptools)
+library(dplyr)
+library(tidyr)
+library(RColorBrewer)
+
+gpclibPermit()
+
+setwd("C:/Users/Jeanette/Desktop/best-manos a la data/Tarea/provincias")
+
+peru<-readOGR(dsn="PROVINCIAS.shp",
+             layer="PROVINCIAS")
+
+peru_f<-fortify(peru,region="PROVINCIA")
+
+peru_f<-peru_f %>%
+  mutate(id=replace(id, id=="MARAÃ‘ON", "MARAÑON")) %>%
+  mutate(id=replace(id, id=="FERREÃ‘AFE", "FERREÑAFE"))%>%
+  mutate(id=replace(id, id=="CAÃ‘ETE", "CAÑETE")) %>%
+  mutate(id=replace(id, id=="DATEM DEL MARAÃ‘ON", "DATEM DEL MARAÑON"))
+
+Univ <- readxl::read_xlsx("Universidades_2020.xlsx",sheet = "Hoja1",skip = 0)
+
+Univ2 <- Univ %>%# la BD!
+  group_by(DEPARTAMENTO,`PROVINCIA`,`TIPO DE LOCAL`,`TIPO DE GESTION`,`ESTADO DE LICENCIA`) %>% # agrupala segun...
+  summarise(`NÚMERO DE LOCALES`=n())%>%# crea una nueva variable
+  arrange(desc(`NÚMERO DE LOCALES`))
+
+Univ2$id<-Univ2$PROVINCIA
+```
+
+## Grafico: Informacion de locales por tipo de gestion, estado de licencia y departamento
+
+```{r grafico_2, echo=FALSE,comment=F,warning=FALSE,message=FALSE,fig.height=10, fig.width=10}
+
+p <- Univ %>%
+  group_by(`TIPO DE GESTION`,`ESTADO DE LICENCIA`, DEPARTAMENTO) %>% 
+  summarise(`NÚMERO DE LOCALES`=n())%>%
+  arrange(desc(`NÚMERO DE LOCALES`))
+  
+p <- ggplot (p , aes(x = `ESTADO DE LICENCIA`, y = `NÚMERO DE LOCALES`, fill = `DEPARTAMENTO`)) 
+ 
+p <- p + geom_bar(stat = "identity", position = "stack") +
+  labs(title = "Cantidad de locales ", x="", y="") +
+  facet_wrap(~`TIPO DE GESTION`)
+
+ggplotly(p) %>% layout(legend = list(orientation = "h", x = 0.4, y = -0.2),title ="Cantidad de locales, 2020", yaxis = list(title = "Total")) 
+
+```
+
+## Mapa: Informacion de locales por provincia y estado de licencia
+
+```{r configuracion_inicial2,echo=FALSE,comment=F,warning=FALSE,message=FALSE,include=FALSE}
+peru_f$id<- tolower(peru_f$id)
+Univ2$id<- tolower(Univ2$id)
+
+map <-  merge(peru_f,Univ2, by="id", all=TRUE)
+
+map<-map %>%
+  mutate(`NÚMERO DE LOCALES`=replace(`NÚMERO DE LOCALES`, `NÚMERO DE LOCALES`== "NA", 0)) 
+
+map[is.na(map)] <- 0
+map<-map %>%
+  filter(!`NÚMERO DE LOCALES` %in% c(0))
+
+map  <-  map[order(map$order),]
+
+```
+
+
+```{r grafico_1, echo=FALSE,comment=F,warning=FALSE,message=FALSE,fig.height=10, fig.width=10}
+map2  <- ggplot(map,aes(x=long,y=lat,group=group)) + 
+  geom_polygon(aes(fill=`NÚMERO DE LOCALES` )) +
+  scale_fill_gradient(low="#56b1f7", high="#132b43") +
+labs(title = "Cantidad de locales que brindan servicio educativo universitario", x="", y="")
+
+map2  <- map2 + facet_wrap(~`ESTADO DE LICENCIA`)
+
+ggplotly(map2)  %>% 
+  layout(legend = list(orientation = "h", x = 0.4, y = -0.2),title ="Cantidad de locales")
+```
+
+
+## Tabla: Informacion de locales por institucion educativa
+
+```{r tabla, echo=FALSE,fig.height=30,comment=F,warning=FALSE,message=FALSE}
+Univ %>%# la BD!
+  group_by(UNIVERSIDAD,`TIPO DE LOCAL`,`TIPO DE GESTION`,`ESTADO DE LICENCIA`, DEPARTAMENTO) %>% # agrupala segun...
+  summarise(`NÚMERO DE LOCALES`=n())%>%# crea una nueva variable
+  arrange(desc(`NÚMERO DE LOCALES`))%>% 
+  DT::datatable() # mira la data
+
+```
+
+
+
+
